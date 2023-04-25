@@ -13,25 +13,23 @@ From Pip
 
 .. code-block:: console
 
-    $ pip install bpycad
+    pip install bpycad
 
 From Source
 ^^^^^^^^^^^
 
 .. code-block:: console
 
-    $ git clone https://github.com/simleek/bpyCAD.git
-    $ cd bpyCAD
-    $ pip install -r requirements.txt
-    $ pip install -r requirements_dev.txt
-    $ pip install -e .
+    git clone https://github.com/simleek/bpyCAD.git
+    cd bpyCAD
+    pip install -r requirements.txt
+    pip install -r requirements_dev.txt
+    pip install -e .
 
 Usage
 -----
 
-To use the CAD generator script, first open the Blender scene that you want to generate CAD files for. Then, in the Blender Text Editor, open the `cad_generator.py` script and run it. The script will prompt you to specify the output file format and location.
-
-Once you have specified the output file format and location, the script will generate the CAD file and save it to the specified location.
+Todo
 
 Supported File Formats
 ----------------------
