@@ -1,9 +1,7 @@
 import bpy
 from mathutils import Matrix
-import trimesh
 import bmesh
 import numpy as np
-import pyrender
 
 class MeshObject:
     def __init__(self, mesh_name, object_name):
@@ -17,28 +15,6 @@ class MeshObject:
     def obj_from_mesh(self):
         self.obj = bpy.data.objects.new(self.obj_name, self.mesh)
         bpy.context.scene.collection.objects.link(self.obj)
-
-    def set_origin(self, location):
-        self.obj.location = location
-
-    def set_rotation_matrix(self, matrix3x3):
-        self.obj.rotation_mode = 'MATRIX'
-        # matrix4x4rot = np.identity(4)
-        # matrix4x4rot[:3, :3] = matrix3x3
-        # Get the existing transformation matrix
-        existing_matrix = self.obj.matrix_world
-
-        # Get the existing location and scale
-        existing_location, existing_scale = existing_matrix.decompose()[1:]
-
-        # Construct a new transformation matrix from the rotation matrix and the existing location and scale
-        new_matrix = Matrix.Translation(existing_location) @ matrix3x3.to_4x4() @ Matrix.Scale(existing_scale[0], 4)
-
-        # Set the new transformation matrix
-        self.obj.matrix_world = new_matrix
-
-    def set_scale(self, scale):
-        self.obj.scale = scale
 
     @classmethod
     def from_existing_object(cls, obj):
@@ -56,6 +32,12 @@ class MeshObject:
     def update_vertices_faces_from_obj(self):
         assert self.obj is not None
         mesh_data = self.obj.data
+        self.vertices = [v.co for v in mesh_data.vertices]
+        self.faces = [f.vertices for f in mesh_data.polygons]
+
+    def update_vertices_faces_from_mesh(self):
+        assert self.mesh is not None
+        mesh_data = self.mesh
         self.vertices = [v.co for v in mesh_data.vertices]
         self.faces = [f.vertices for f in mesh_data.polygons]
 
@@ -119,13 +101,6 @@ class MeshObject:
         self.faces.append([v1_len, v1_len + v2_len, v1_len + v2_len + v2_len - 1])
         # self.update_internal_mesh()
 
-    def display_mesh(self):
-        self.convert_to_triangles()
-        mesh = trimesh.Trimesh(vertices=self.vertices, faces=self.faces)
 
-        mesh = pyrender.Mesh.from_trimesh(mesh)
-        scene = pyrender.Scene()
-        scene.add(mesh)
-        pyrender.Viewer(scene, all_wireframe=True, cull_faces=True)
 
 
