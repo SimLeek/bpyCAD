@@ -2,9 +2,21 @@ import bpy
 from mathutils import Matrix
 import bmesh
 import numpy as np
+import string
+import random
+
+def _default_name(length=64):
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choices(characters, k=length))
 
 class MeshObject:
-    def __init__(self, mesh_name, object_name):
+    def __init__(self, mesh_name=None, object_name=None):
+
+        if mesh_name == None:
+            mesh_name = _default_name()
+        if object_name == None:
+            object_name = _default_name()
+
         self.mesh_name = mesh_name
         self.obj_name = object_name
         self.mesh = bpy.data.meshes.new(name=mesh_name)
@@ -29,16 +41,35 @@ class MeshObject:
 
         return new_mesh_object
 
+    @classmethod
+    def copy(cls, other_mesh_object):
+        new_mesh_name = _default_name()
+        new_obj_name = _default_name()
+
+        new_mesh = bpy.data.meshes.new(name=new_mesh_name)
+        new_mesh.from_pydata(other_mesh_object.vertices, [], other_mesh_object.faces)
+        new_mesh.update()
+
+        new_mesh_object = cls(mesh_name=new_mesh_name, object_name=new_obj_name)
+        new_mesh_object.mesh = new_mesh
+        new_mesh_object.obj_from_mesh()
+        new_mesh_object.obj.location = other_mesh_object.obj.location
+        new_mesh_object.obj.rotation_mode = other_mesh_object.obj.rotation_mode
+        new_mesh_object.obj.matrix_world = other_mesh_object.obj.matrix_world
+        new_mesh_object.obj.rotation_euler = other_mesh_object.obj.rotation_euler
+
+        return new_mesh_object
+
     def update_vertices_faces_from_obj(self):
         assert self.obj is not None
         mesh_data = self.obj.data
-        self.vertices = [v.co for v in mesh_data.vertices]
+        self.vertices = [list(v.co) for v in mesh_data.vertices]  # list conversion makes it more debuggable
         self.faces = [f.vertices for f in mesh_data.polygons]
 
     def update_vertices_faces_from_mesh(self):
         assert self.mesh is not None
         mesh_data = self.mesh
-        self.vertices = [v.co for v in mesh_data.vertices]
+        self.vertices = [list(v.co) for v in mesh_data.vertices]
         self.faces = [f.vertices for f in mesh_data.polygons]
 
     def update_mesh(self, vertices, faces):

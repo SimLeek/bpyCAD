@@ -6,12 +6,23 @@ import numpy as np
 #from numpy import random
 
 def display_mesh(mo: MeshObject):
-    mo.convert_to_triangles()
-    mesh = trimesh.Trimesh(vertices=mo.vertices, faces=mo.faces)
-
-    mesh = pyrender.Mesh.from_trimesh(mesh)
     scene = pyrender.Scene()
-    scene.add(mesh)
+
+    def add_mesh(m):
+        m.convert_to_triangles()
+        mesh = trimesh.Trimesh(vertices=m.vertices, faces=m.faces).apply_transform(np.asarray(m.obj.matrix_world))
+
+        mesh = pyrender.Mesh.from_trimesh(mesh)
+        scene.add(mesh)
+
+    if isinstance(mo, (list, tuple)):
+        for momesh in mo:
+            momesh.update_vertices_faces_from_obj()
+            add_mesh(momesh)
+    else:
+        mo.update_vertices_faces_from_mesh()
+        add_mesh(mo)
+
     pyrender.Viewer(scene, all_wireframe=True, cull_faces=True)
 
 

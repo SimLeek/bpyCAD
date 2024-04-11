@@ -1,30 +1,52 @@
 from .mesh_object import MeshObject
 import numpy as np
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector, Euler
 
 
 def set_origin(mo: MeshObject, location):
     mo.obj.location = location
 
+def set_mesh_xform(mo):
+    mb = mo.obj.matrix_basis
+    if hasattr(mo.obj.data, "transform"):
+        mo.obj.data.transform(mb)
+    for c in mo.obj.children:
+        c.matrix_local = mb @ c.matrix_local
+    mo.obj.matrix_basis.identity()
 
-def translate_3d(mo, distance):
-    mo.obj.location += distance
+def translate_3d(mo, distance, copy=True):
+    if copy:
+        mo = mo.copy(mo)
+    mo.obj.location += Vector(distance)
+
+    set_mesh_xform(mo)
+
+    mo.update_vertices_faces_from_obj()
+    return mo
 
 
-def translate_2d(pts, vector):
-    transformed_points = [transformed_point + vector for transformed_point in pts]
-    return transformed_points
-
-
-def translate(obj, vec):
-    if isinstance(obj, MeshObject):
-        translate_3d(obj, vec)
+def translate_2d(pts, vector, copy=True):
+    if copy:
+        transformed_points = [transformed_point + vector for transformed_point in pts]
+        return transformed_points
     else:
-        translate_2d(obj, vec)
+        for pt in pts:
+            pt += vector
+        return pts
+
+
+def translate(obj, vec, copy=True):
+    if isinstance(obj, MeshObject):
+        return translate_3d(obj, vec, copy=copy)
+    else:
+        return translate_2d(obj, vec, copy=copy)
 
 
 def _rotate_matrix(mo: MeshObject, matrix3x3):
+    if copy:
+        mo = mo.copy(mo)
+
     mo.obj.rotation_mode = 'MATRIX'
     # matrix4x4rot = np.identity(4)
     # matrix4x4rot[:3, :3] = matrix3x3
@@ -40,14 +62,23 @@ def _rotate_matrix(mo: MeshObject, matrix3x3):
     # Set the new transformation matrix
     mo.obj.matrix_world = new_matrix
 
+    set_mesh_xform(mo)
 
-def _rotate_euler(mo: MeshObject, euler_angles):
+    return mo
+
+
+def _rotate_euler(mo: MeshObject, euler_angles, copy=True):
+    if copy:
+        mo = mo.copy(mo)
     mo.obj.rotation_mode = 'XYZ'
     mo.obj.rotation_euler = euler_angles
 
+    set_mesh_xform(mo)
 
-def rotate_3d(obj: MeshObject, *rot):
-    rot_np, axis, angle = None
+    return mo
+
+def rotate_3d(obj: MeshObject, *rot, copy=True):
+    rot_np, axis, angle = None, None, None
     if len(rot) == 1:
         rot_np = np.asarray(rot[0])
     elif len(rot) == 2:
@@ -60,33 +91,41 @@ def rotate_3d(obj: MeshObject, *rot):
         shape = rot_np.shape
         if shape == (4,):
             raise NotImplementedError("Quaternion rotation not implemented yet")
+        elif shape == (1,3):
+            euler = Euler(rot_np[0], 'XYZ')
+            return _rotate_euler(obj, euler, copy=copy)
         elif shape == (3,):
-            euler = bpy.data.euler.Euler(rot_np, 'XYZ')
-            _rotate_euler(obj, euler)
+            euler = Euler(rot_np, 'XYZ')
+            return _rotate_euler(obj, euler, copy=copy)
         elif shape == (3, 3):
             matrix = Matrix(rot_np)
-            _rotate_matrix(obj, matrix)
+            return _rotate_matrix(obj, matrix, copy=copy)
     else:
         assert axis is not None and angle is not None
         raise NotImplementedError("axis angle rotation not implemented yet")
 
 
-def rotate_2d(pts: np.array, angle):
+def rotate_2d(pts: np.array, angle, copy=True):
     rotation_matrix = np.array([
         [np.cos(angle), -np.sin(angle)],
         [np.sin(angle), np.cos(angle)]
     ])
-    transformed_points = [np.matmul(rotation_matrix, point) for point in pts]
-    return transformed_points
+    if copy:
+        transformed_points = [np.matmul(rotation_matrix, point) for point in pts]
+        return transformed_points
+    else:
+        for point in pts:
+            point = np.matmul(rotation_matrix, point)
+        return points
 
 
-def rotate(obj, *rot):
+def rotate(obj, *rot, copy=True):
     if isinstance(obj, MeshObject):
-        rotate_3d(obj, rot)
+        return rotate_3d(obj, rot, copy=copy)
     else:
         obj_np = np.asarray(obj)
         if obj.shape[-1] == 2 and len(obj.shape) == 2:  # assert 2d points
-            rotate_2d(obj_np, rot)
+            return rotate_2d(obj_np, rot, copy=copy)
         else:
             raise NotImplementedError(f"Rotating {type(obj)} not supported yet")
 

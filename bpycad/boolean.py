@@ -32,21 +32,27 @@ def boolean_3d(*mesh_objects: MeshObject, op=BooleanOperation.UNION, solver=Bool
     if len(others) == 1:
         bool_mod.object = others[0].obj
     else:
-        bool_objs = bpy.data.collections.new("Boolean Objects")
-        for o in others:
-            bool_objs.objects.link(o.obj)
-        bool_mod.object = bool_objs
+        #bool_objs = bpy.data.collections.new("Boolean Objects")
+        #for o in others:
+        #    bool_objs.objects.link(o.obj)
+        #bool_mod.collection = bool_objs
+
+        # note: consecutive objects must overlap
+        other = boolean_3d(*mesh_objects[1:], op=op, solver=solver)
+        bool_mod.object = other.obj
 
     # Set the modifier operation to union
     bool_mod.operation = op.value
 
     bool_mod.solver = solver.value
+    #bool_mod.use_hole_tolerant = True
 
     # Enable the modifier
     bool_mod.show_viewport = True
     bool_mod.show_render = True
 
     # Apply the modifier
+    bpy.context.view_layer.objects.active = self.obj
     bpy.ops.object.modifier_apply(modifier=bool_mod.name)
 
     self.update_vertices_faces_from_obj()
@@ -84,8 +90,16 @@ def boolean_2d(*np_objs, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
 
     return result
 
+def flatten_list(list_in):
+    if isinstance(list_in,(list, tuple)):
+        for l in list_in:
+            for y in flatten_list(l):
+                yield y
+    else:
+        yield list_in
 
 def boolean(*objs, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
+    objs = [o for o in flatten_list(objs)]
     if isinstance(objs[0], MeshObject):
         return boolean_3d(*objs, op=op, solver=solver)
     else:

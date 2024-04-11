@@ -91,12 +91,13 @@ def text(text_str, font=None, size=100):
         elif platform == "darwin":
             font = "/System/Library/Fonts/Arial.ttf"
         else:
-            font = "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf"
+            font = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
 
     font = ImageFont.truetype(font, size)
     img = Image.new('RGB', (1, 1), color='black')
     draw = ImageDraw.Draw(img)
-    text_size = draw.textsize(text_str, font=font)
+    text_size = draw.textbbox([0,0], text_str, font=font)
+    text_size = [text_size[2], text_size[3]]
 
     pil_image = Image.new('RGB', text_size, color='black')
 

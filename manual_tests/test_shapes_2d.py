@@ -18,6 +18,6 @@ def test_show_rectangle():
 
 
 def test_show_char():
-    a = text('まさか!?', font="C:\Windows\Fonts\simsun.ttc")
+    a = text('まさか!?', font=None)
     # a = text('☺')
     show_2d_point_loops(a)
