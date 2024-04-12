@@ -125,3 +125,35 @@ def flip_normals(mo:MeshObject):
     else:
         print("Selected object is not a mesh.")
     mo.update_vertices_faces_from_mesh()
+
+def triangulate(mo):
+    # fixes some mesh problems
+    bpy.context.view_layer.objects.active = rack_prism_poly.obj
+    bpy.ops.object.modifier_add(type='TRIANGULATE')
+    bpy.ops.object.modifier_apply(modifier="Triangulate")
+
+
+def close_holes(mo:MeshObject):
+    # closes ALL faces... including internal ones. Could still work?
+    # alt is remesh, which would be much slower.
+    # from: https://blender.stackexchange.com/a/99228
+    bm = bmesh.new()
+    # import from obj file here, only imported objects will be
+    # in context.selected_objects after import.
+    # test here to continue if not mesh, can obj import other???
+    # load bmesh
+    bm.from_mesh(mo.obj.data)
+    # find boundaries
+    bound_edges = set(e for e in bm.edges if e.is_boundary)
+    # used sets, may not be required.
+    zero_edges = set(e for e in bound_edges
+                     if all(abs(v.co.x) < 0.001 for v in e.verts))
+    right_edges = bound_edges - zero_edges
+    # use bmesh "F" tool
+    result = bmesh.ops.contextual_create(bm, geom=list(bound_edges))
+    # poke the resulting faces to make triangular fan.
+    bmesh.ops.poke(bm, faces=result["faces"])
+    bm.to_mesh(mo.obj.data)
+    mo.obj.data.update()  # mainly only need for UI really
+    bm.clear()
+    bm.free()
