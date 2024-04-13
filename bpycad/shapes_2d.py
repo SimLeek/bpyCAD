@@ -1,12 +1,47 @@
 import numpy as np
 import cv2
-import os
 from sys import platform
+from typing import List
+import bisect
 
 default_min_angle = np.pi / 15
 default_min_chord = 2
 from PIL import ImageFont, ImageDraw, Image
 
+class Shape2D:
+    def __init__(self, vertices, faces):
+        self.vertices = vertices
+        self.faces = faces  # loops of vertex indices
+
+def polygon(vertices:np.ndarray):
+    assert vertices.shape[1] == 2, "Input numpy array must have shape [n, 2]"
+    face = [[i for i in range(vertices.shape[0])]]
+    return Shape2D(vertices, face)
+
+
+
+def polygons(vertices: List[np.ndarray]):
+    unique_vertices = []
+    faces = []
+
+    for v in vertices:
+        v = np.asarray(v)
+        assert v.shape[1] == 2, "Input numpy array must have shape [n, 2]"
+        face = []
+        for vertex in v:
+            unique_vertex_index = bisect.bisect_left(unique_vertices, list(vertex)+[float('inf')])
+            if unique_vertex_index < len(unique_vertices) and np.array_equal(unique_vertices[unique_vertex_index][:2],
+                                                                             vertex):
+                face.append(unique_vertices[unique_vertex_index][2])
+            else:
+                unique_vertices.insert(unique_vertex_index, list(vertex)+[len(unique_vertices)])
+                face.append(len(unique_vertices) - 1)
+        faces.append(face)
+
+    unique_vertices.sort(key=lambda x: x[2])
+    unique_vertices = np.array(unique_vertices)[:, :2]
+
+    return Shape2D(unique_vertices, faces)
 
 def get_theta_step(radius, min_angle=None, min_chord=None, num_fragments=None):
     if num_fragments is not None:
@@ -30,23 +65,23 @@ def circle(radius, min_angle=None, min_chord=None, num_fragments=None):
     theta = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
     x = radius * np.cos(theta)
     y = radius * np.sin(theta)
-    return np.column_stack((x, y))
+    return polygon(np.column_stack((x, y)))
 
 
 def square(s):
     half_s = s / 2
-    return np.array([
+    return polygon(np.array([
         [-half_s, -half_s],
         [half_s, -half_s],
         [half_s, half_s],
         [-half_s, half_s]
-    ])
+    ]))
 
 
 def rectangle(width, height):
     x = [-width / 2, width / 2, width / 2, -width / 2]
     y = [-height / 2, -height / 2, height / 2, height / 2]
-    return np.column_stack((x, y))
+    return polygon(np.column_stack((x, y)))
 
 
 def is_ccw(points):
@@ -124,4 +159,4 @@ def text(text_str, font=None, size=100):
         ccw_polygon = [tuple(point[0]) for point in contour.tolist()]
         ccw_polygons.append(ccw_polygon)
 
-    return ccw_polygons
+    return polygons(ccw_polygons)
