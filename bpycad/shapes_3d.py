@@ -125,12 +125,14 @@ def flip_normals(mo:MeshObject):
     else:
         print("Selected object is not a mesh.")
     mo.update_vertices_faces_from_mesh()
+    return mo
 
 def triangulate(mo):
     # fixes some mesh problems
-    bpy.context.view_layer.objects.active = rack_prism_poly.obj
+    bpy.context.view_layer.objects.active = mo.obj
     bpy.ops.object.modifier_add(type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier="Triangulate")
+    return mo
 
 
 def close_holes(mo:MeshObject):
@@ -157,3 +159,4 @@ def close_holes(mo:MeshObject):
     mo.obj.data.update()  # mainly only need for UI really
     bm.clear()
     bm.free()
+    return mo

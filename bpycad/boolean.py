@@ -1,3 +1,4 @@
+import bisect
 from enum import Enum
 from .mesh_object import MeshObject
 from shapely.geometry import Polygon, LinearRing, MultiPolygon
@@ -6,6 +7,7 @@ import shapely
 from rtree import index
 import bpy
 from .shapes_2d import Shape2D, polygon, polygons
+from scipy.sparse import coo_matrix
 
 class BooleanOperation(Enum):
     INTERSECT = 'INTERSECT'
@@ -27,16 +29,26 @@ def traverse_edge_graph(edge_graph):
     # Initialize start vertex
     start_vertex = 0
 
+    to_add = 0
+
     # Traverse the edge graph
+    current_vertex = start_vertex
+    path = []
+    subpath = [current_vertex]
+
     while start_vertex < edge_graph.shape[0]:
         # Check if the start vertex has any unvisited neighbors
         if not np.any(edge_graph.row == start_vertex):
             start_vertex += 1
+            if start_vertex not in path:
+                faces.append(path[:])
+                path = []
+                subpath = [start_vertex]
             continue
 
         # Start a new path from the current start vertex
+
         current_vertex = start_vertex
-        path = [current_vertex]
 
         # Traverse the path until we return to the start vertex
         while True:
@@ -47,8 +59,10 @@ def traverse_edge_graph(edge_graph):
             next_edge_index = None
             for index in edge_indices:
                 edge = (edge_graph.row[index], edge_graph.col[index])
-                if edge not in visited:
+                if edge_graph.data[index] != 0:  # not visited, so visit
                     next_edge_index = index
+                    edge_graph.data[index] = 0  # mark visited
+                    to_add+=1
                     break
 
             # If there is no unvisited edge, break the loop
@@ -56,15 +70,22 @@ def traverse_edge_graph(edge_graph):
                 break
 
             # Mark the edge as visited
-            visited.add((edge_graph.row[next_edge_index], edge_graph.col[next_edge_index]))
-
+            #visited.add((edge_graph.row[next_edge_index], edge_graph.col[next_edge_index]))
             # Update the current vertex
             current_vertex = edge_graph.col[next_edge_index]
-            path.append(current_vertex)
+            subpath.append(current_vertex)
+
+            edge_graph.eliminate_zeros()
 
             # If we've reached the start vertex again, record the path as a face
-            if current_vertex == start_vertex:
-                faces.append(path[:])
+            if current_vertex == start_vertex :
+                try:
+                    path_insert = next(i for i, j in enumerate(path) if j==start_vertex)+1
+                except StopIteration:
+                    path_insert = 0
+                #path_insert = bisect.bisect_left(path, start_vertex)
+                path = path[:path_insert] + subpath + path [path_insert:]
+                subpath = []
                 break
 
     return faces
@@ -85,7 +106,7 @@ def split_holes_for_blender(shape_with_holes):
         idx.insert(counter, vertex)
         vertices.append(vertex)
         counter += 1
-
+    shape_counter.append(counter)
     # Iterate over each hole
     for hole in shape_with_holes.interiors:
         # Add the interior of each hole to the R-tree
@@ -101,7 +122,7 @@ def split_holes_for_blender(shape_with_holes):
     data = []
 
     # Iterate over each shape (outer shape and holes)
-    for i in range(len(shape_counter)):
+    for i in range(len(shape_counter)-1):
         # Get the shape corresponding to the current index
         if i == 0:
             shape = shape_with_holes.exterior
@@ -110,19 +131,19 @@ def split_holes_for_blender(shape_with_holes):
 
         # Add edges between consecutive vertices within the current shape
         prev_vertex = None
-        for vertex_id, vertex in enumerate(vertices):
+        for vertex_id, vertex in enumerate(vertices[shape_counter[i]:shape_counter[i+1]]):
             true_id = vertex_id + shape_counter[i]
             if prev_vertex is not None:
-                rows.extend([prev_vertex, true_id])
-                # cols.extend([true_id, prev_vertex])
+                rows.extend([prev_vertex])
+                cols.extend([true_id])
                 data.extend([1])
             prev_vertex = true_id
 
         # Connect the last vertex to the first vertex to finish the loop for each shape
         if prev_vertex is not None:
             first_vertex = shape_counter[i]
-            rows.extend([prev_vertex, first_vertex])
-            # cols.extend([first_vertex, prev_vertex])
+            rows.extend([prev_vertex])
+            cols.extend([first_vertex])
             data.extend([1])
 
         # Remove vertices of the current shape from the R-tree
@@ -141,7 +162,7 @@ def split_holes_for_blender(shape_with_holes):
                 distance = np.linalg.norm(np.asarray(vertex) - np.asarray(vertices[other_vertex]))
                 if distance < min_distance:
                     min_distance = distance
-                    closest_pair = (i, other_vertex)
+                    closest_pair = (j_idx, other_vertex)
 
         # Add the closest pair of vertices to the list
         if closest_pair is not None:
@@ -153,6 +174,8 @@ def split_holes_for_blender(shape_with_holes):
         # Add vertices of the current shape back to the R-tree
         for j, vertex in enumerate(shape.coords):
             idx.insert(j+shape_counter[i], vertex)
+
+        pass
 
     # Create COO matrix
     edge_graph = coo_matrix((data, (rows, cols)), shape=(counter, counter))
@@ -202,15 +225,17 @@ def boolean_3d(*mesh_objects: MeshObject, op=BooleanOperation.UNION, solver=Bool
     return self
 
 
-def boolean_2d(*np_objs, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
+def boolean_2d(*np_objs:Shape2D, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
     assert len(np_objs) >= 2
     self = np_objs[0]
     others = np_objs[1:]
 
-    self = Polygon(np.append(self, self[0:1, :], axis=0))  # todo: fix
+    # note: Shape2D should only ever include shapes without holes, so assume it only includes shapes without holes.
+    # extra list brackets to tell that this is the shell shape. next would be holes
+    self = MultiPolygon([[[self.vertices[f] for f in face] for face in self.faces]])
 
     for o in others:
-        shapely_poly2 = Polygon(np.append(o, o[0:1, :], axis=0))
+        shapely_poly2 = MultiPolygon([[[o.vertices[f] for f in face] for face in o.faces]])
         if op == BooleanOperation.UNION:
             self = self.union(shapely_poly2)
         elif op == BooleanOperation.INTERSECT:
@@ -228,7 +253,7 @@ def boolean_2d(*np_objs, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
         for f in range(len(result.faces)):
             result.faces[f] = list(reversed(result.faces[f]))
     elif isinstance(self, MultiPolygon):
-        result = [split_holes_for_blender(s) for s in self]
+        result = [split_holes_for_blender(s) for s in self.geoms]
         for r in result:
             for f in range(len(r.faces)):
                 r.faces[f] = list(reversed(r.faces[f]))
@@ -240,6 +265,7 @@ def boolean_2d(*np_objs, op=BooleanOperation.UNION, solver=BooleanSolver.EXACT):
             for f in r.faces:
                 for fi in range(len(f)):
                     f[fi]+=v_count
+            v_count += len(r.vertices)
             result_faces.extend(r.faces)
         result = Shape2D(
             result_verts,

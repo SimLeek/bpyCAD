@@ -2,7 +2,7 @@ from .mesh_object import MeshObject
 import numpy as np
 import bpy
 from mathutils import Matrix, Vector, Euler
-
+from .shapes_2d import Shape2D
 
 def set_origin(mo: MeshObject, location):
     mo.obj.location = location
@@ -26,12 +26,12 @@ def translate_3d(mo, distance, copy=True):
     return mo
 
 
-def translate_2d(pts, vector, copy=True):
+def translate_2d(pts:Shape2D, vector, copy=True):
     if copy:
         transformed_points = [transformed_point + vector for transformed_point in pts]
-        return transformed_points
+        return Shape2D(transformed_points, pts.faces)
     else:
-        for pt in pts:
+        for pt in pts.vertices:
             pt += vector
         return pts
 
@@ -105,29 +105,31 @@ def rotate_3d(obj: MeshObject, *rot, copy=True):
         raise NotImplementedError("axis angle rotation not implemented yet")
 
 
-def rotate_2d(pts: np.array, angle, copy=True):
+def rotate_2d(pts: Shape2D, angle, copy=True):
     rotation_matrix = np.array([
         [np.cos(angle), -np.sin(angle)],
         [np.sin(angle), np.cos(angle)]
     ])
+    rotation_matrix = rotation_matrix.squeeze()
     if copy:
-        transformed_points = [np.matmul(rotation_matrix, point) for point in pts]
-        return transformed_points
+        transformed_points = [np.matmul(rotation_matrix, point) for point in pts.vertices]
+        return Shape2D(transformed_points, pts.faces)
     else:
-        for point in pts:
+        for point in pts.vertices:
             point = np.matmul(rotation_matrix, point)
-        return points
+        return pts
 
 
 def rotate(obj, *rot, copy=True):
     if isinstance(obj, MeshObject):
         return rotate_3d(obj, rot, copy=copy)
     else:
-        obj_np = np.asarray(obj)
-        if obj.shape[-1] == 2 and len(obj.shape) == 2:  # assert 2d points
-            return rotate_2d(obj_np, rot, copy=copy)
-        else:
-            raise NotImplementedError(f"Rotating {type(obj)} not supported yet")
+        return rotate_2d(obj, rot, copy=copy)
+        #obj_np = np.asarray(obj.vertices)
+        #if obj.vertices.shape[-1] == 2 and len(obj.vertices.shape) == 2:  # assert 2d points
+        #    return rotate_2d(obj_np, rot, copy=copy)
+        #else:
+        #    raise NotImplementedError(f"Rotating {type(obj)} not supported yet")
 
 
 def set_scale(self, scale):
