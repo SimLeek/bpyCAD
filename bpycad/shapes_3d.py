@@ -127,11 +127,25 @@ def flip_normals(mo:MeshObject):
     mo.update_vertices_faces_from_mesh()
     return mo
 
+def remove_faulty_triangles(mesh_object):
+    new_faces = []
+    for face in mesh_object.faces:
+        if len(face) == 3:  # Only consider triangles
+            if len(set(face)) == 3:  # Check for unique vertices
+                new_faces.append(face)
+    mesh_object.update_mesh(mesh_object.vertices, new_faces)
+    mesh_object.obj_from_mesh()
+
 def triangulate(mo):
     # fixes some mesh problems
     bpy.context.view_layer.objects.active = mo.obj
     bpy.ops.object.modifier_add(type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier="Triangulate")
+
+    mo.update_vertices_faces_from_mesh()
+    remove_faulty_triangles(mo)
+    mo.update_vertices_faces_from_mesh()
+
     return mo
 
 

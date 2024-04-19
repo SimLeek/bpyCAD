@@ -26,16 +26,20 @@ def linear_extrude(not_2d:Shape2D, x, y, z):
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.select_mode(type='FACE')
-    bpy.ops.mesh.duplicate()
-    bpy.ops.mesh.flip_normals()
-    bpy.ops.mesh.select_all(action='INVERT')
-    bpy.ops.mesh.extrude_faces_move()
-    bpy.ops.transform.translate(value=(x, y, z))
-    merge_threshold = 0.0
+    # doesn't work:
+    #   bpy.ops.mesh.duplicate()
+    #   bpy.ops.mesh.flip_normals()
+    TRANSFORM_OT_translate = {"value": (x, y, z), "constraint_axis": (False, False, False)}
+    # does the same as extrude region move:
+    #   bpy.ops.mesh.extrude_manifold(TRANSFORM_OT_translate=TRANSFORM_OT_translate)
+    bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={"mirror":False},TRANSFORM_OT_translate=TRANSFORM_OT_translate)
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=merge_threshold)
-
+    # SHOULD work, but doesn't. The mesh edit->mesh->normals->recalc outside option in blender works.
+    # bmesh also doesn't work.
+    # however, afaik, the normals don't actually need to be 100% correct
+    bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
+
     m.update_vertices_faces_from_mesh()
     return m
 
